@@ -111,7 +111,7 @@ def detect_outliers_kmeans(data, n_clusters=2):
     # 计算轮廓系数
     coefficient = silhouette_score(data, kmeans.labels_)
     logger.debug("Silhouette Coefficient：{}", coefficient)
-    if coefficient < 0.1:
+    if coefficient < 0.61:
         return np.ones(len(data), dtype=int)
 
     scores = labels
