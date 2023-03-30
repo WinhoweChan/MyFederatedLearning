@@ -14,16 +14,17 @@ class MyFunction:
 
     def score(self, global_model, local_models, clients_types, selected_clients, source_class=None, m=0, n=0):
 
+        num_workers = len(selected_clients)
         P = generate_orthogonal_matrix(n=m, reuse=True)
-        W = generate_orthogonal_matrix(n=n*len(selected_clients), reuse=True)
-        Ws = [W[:, e * n: e * n + n][0, :].reshape(-1, 1) for e in range(n)]
+        W = generate_orthogonal_matrix(n=n*num_workers, reuse=True)
+        Ws = [W[:, e * n: e * n + n][0, :].reshape(-1, 1) for e in range(num_workers)]
 
         param_diff = []
         param_diff_mask = []
 
         start_model_layer_param = list(global_model.state_dict()['fc2.weight'][source_class].cpu())
 
-        m = len(local_models)
+        m_len = len(local_models)
 
         # 计算每个本地模型的权重与全局模型最后一层权重之间的梯度差
         for i in range(m):
