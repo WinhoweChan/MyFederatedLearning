@@ -27,7 +27,7 @@ class MyFunction:
         m_len = len(local_models)
 
         # 计算每个本地模型的权重与全局模型最后一层权重之间的梯度差
-        for i in range(m):
+        for i in range(m_len):
             end_model_layer_param = list(local_models[i].state_dict()['fc2.weight'][source_class].cpu())
 
             gradient = calculate_parameter_gradients(start_model_layer_param, end_model_layer_param)
