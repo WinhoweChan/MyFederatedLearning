@@ -251,7 +251,7 @@ class FL:
             elif rule == 'tmean':
                 cur_time = time.time()
                 # trim_ratio = self.attackers_ratio * self.num_clients / len(selected_clients)
-                trim_ratio = 2 * self.attackers_ratio * len(selected_clients) / self.num_clients
+                trim_ratio = self.attackers_ratio * len(selected_clients) / self.num_clients
                 global_weights = trimmed_mean(local_weights, trim_ratio=trim_ratio)
                 cpu_runtimes.append(time.time() - cur_time)
 
