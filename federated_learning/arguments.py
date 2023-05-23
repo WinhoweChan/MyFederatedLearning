@@ -252,6 +252,7 @@ class Arguments:
         return "\nBatch Size: {}\n".format(self.batch_size) + \
                "Test Batch Size: {}\n".format(self.test_batch_size) + \
                "Global Rounds: {}\n".format(self.global_rounds) + \
+               "Local Epochs: {}\n".format(self.local_epochs) + \
                "Learning Rate: {}\n".format(self.lr) + \
                "Momentum: {}\n".format(self.momentum) + \
                "Device: {}\n".format(self.device) + \

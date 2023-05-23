@@ -11,7 +11,7 @@ def generate_log_file(args):
 
 
 def run_exp(num_workers, frac_workers, attack_type, rule, replace_method, dataset, malicious_rate,
-            malicious_behavior_rate):
+            malicious_behavior_rate, global_round, local_epoch, untarget):
     args = Arguments(logger)
     args.set_num_workers(num_workers)
     args.set_frac_workers(frac_workers)
@@ -21,6 +21,8 @@ def run_exp(num_workers, frac_workers, attack_type, rule, replace_method, datase
     args.set_attack_type(attack_type)
     args.set_malicious_rate(malicious_rate)
     args.set_malicious_behavior_rate(malicious_behavior_rate)
+    args.set_global_rounds(global_round)
+    args.set_local_epochs(local_epoch)
 
     args.set_dataset_name(dataset['dataset_name'])
     args.set_model_name(dataset['model_name'])
@@ -49,6 +51,6 @@ def run_exp(num_workers, frac_workers, attack_type, rule, replace_method, datase
 
     flEnv.run_experiment(attack_type=args.get_attack_type(), malicious_behavior_rate=args.get_malicious_behavior_rate(),
                          source_class=args.get_source_class(), target_class=args.get_target_class(),
-                         rule=args.get_rule(), resume=False, model_name=args.get_model_name())
+                         rule=args.get_rule(), resume=False, model_name=args.get_model_name(), untarget=untarget)
 
     logger.remove(handler)

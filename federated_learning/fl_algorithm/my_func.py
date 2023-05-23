@@ -12,23 +12,44 @@ class MyFunction:
     def __init__(self):
         pass
 
-    def score(self, global_model, local_models, clients_types, selected_clients, source_class=None, m=0, n=0):
+    def score(self, global_model, local_models, clients_types, selected_clients, m=0):
 
-        num_workers = len(selected_clients)
+        n = len(selected_clients)
         P = generate_orthogonal_matrix(n=m, reuse=True)
-        W = generate_orthogonal_matrix(n=n*num_workers, reuse=True)
-        Ws = [W[:, e * n: e * n + n][0, :].reshape(-1, 1) for e in range(num_workers)]
+        W = generate_orthogonal_matrix(n=n * n, reuse=True)
+        Ws = [W[:, e * n: e * n + n][0, :].reshape(-1, 1) for e in range(n)]
 
         param_diff = []
         param_diff_mask = []
 
-        start_model_layer_param = list(global_model.state_dict()['fc2.weight'][source_class].cpu())
-
         m_len = len(local_models)
 
+        dw = []
+        db = []
+        for i, local_model in enumerate(local_models):
+            # 计算权重差异
+            dw_item = global_model.state_dict()['fc2.weight'].cpu().numpy() - local_model.state_dict()[
+                'fc2.weight'].cpu().numpy()
+            dw.append(np.linalg.norm(dw_item, axis=-1))
+            db_item = global_model.state_dict()['fc2.bias'].cpu().numpy() - local_model.state_dict()[
+                'fc2.bias'].cpu().numpy()
+            db.append(np.abs(db_item))
+
+        memory = np.sum(dw, axis=0)
+        memory += np.sum(db, axis=0)
+
+        # 找到最常出现的两个类别
+        max_two_freq_classes = np.argsort(memory)[-2:]
+
+        source_class_1, source_class_2 = max_two_freq_classes
+        logger.debug('Potential source: ' + str(source_class_1) + ', ' + str(source_class_2))
+
+        detect_class = source_class_2
+        logger.debug('Detect class: ' + str(detect_class))
+        start_model_layer_param = list(global_model.state_dict()['fc2.weight'][detect_class].cpu())
         # 计算每个本地模型的权重与全局模型最后一层权重之间的梯度差
         for i in range(m_len):
-            end_model_layer_param = list(local_models[i].state_dict()['fc2.weight'][source_class].cpu())
+            end_model_layer_param = list(local_models[i].state_dict()['fc2.weight'][detect_class].cpu())
 
             gradient = calculate_parameter_gradients(start_model_layer_param, end_model_layer_param)
             gradient = gradient.flatten()
@@ -51,8 +72,6 @@ class MyFunction:
         U = U[:, :2]
         res = U * sigma[:2]
         scores = detect_outliers_kmeans(res)
-
-        # plt.scatter(res[:, 0], res[:, 1], color="blue", marker="x", linewidth=5)
 
         logger.debug("Defense result:")
         for i, pt in enumerate(clients_types):
@@ -120,22 +139,6 @@ def detect_outliers_kmeans(data, n_clusters=2):
         scores = 1 - labels
     else:
         scores = labels
-
-    # # 计算Calinski-Harabasz指数
-    # score = calinski_harabasz_score(data, kmeans.labels_)
-    # print("Calinski-Harabasz指数：", score)
-    #
-    # # 计算Davies-Bouldin指数
-    # score = davies_bouldin_score(data, kmeans.labels_)
-    # print("Davies-Bouldin指数：", score)
-    #
-    # # 计算ARI
-    # score = adjusted_rand_score(data, kmeans.labels_)
-    # print("ARI：", score)
-    #
-    # # 计算NMI
-    # score = normalized_mutual_info_score(data, kmeans.labels_)
-    # print("NMI：", score)
 
     return scores
 

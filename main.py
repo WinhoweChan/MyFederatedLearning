@@ -4,9 +4,12 @@ from federated_learning.my_dict import run_mnist, run_cifar10
 from federated_learning.my_dict import fed_avg, my_function, simple_median, trimmed_mean, multi_krum, fools_gold
 
 if __name__ == '__main__':
-    NUM_WORKERS = 10
+    NUM_WORKERS = 20
     FRAC_WORKERS = 1
     ATTACK_TYPE = "label_flipping"
+    GLOBAL_ROUND = 100
+    LOCAL_EPOCH = 1
+    UNTARGET = False
 
     # REPLACE_METHOD = replace_1_with_7()
     # RULE = my_function()
@@ -20,4 +23,5 @@ if __name__ == '__main__':
     MALICIOUS_BEHAVIOR_RATE = 1
 
     for rate in MALICIOUS_RATE:
-        run_exp(NUM_WORKERS, FRAC_WORKERS, ATTACK_TYPE, RULE, REPLACE_METHOD, DATASET, rate, MALICIOUS_BEHAVIOR_RATE)
+        run_exp(NUM_WORKERS, FRAC_WORKERS, ATTACK_TYPE, RULE, REPLACE_METHOD, DATASET, rate,
+                MALICIOUS_BEHAVIOR_RATE, GLOBAL_ROUND, LOCAL_EPOCH, UNTARGET)

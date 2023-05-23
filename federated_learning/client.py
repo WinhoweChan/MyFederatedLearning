@@ -38,7 +38,11 @@ class Client():
 
     # ======================================= Start of training function ===========================================================#
     def participant_update(self, global_epoch, model, attack_type='no_attack', malicious_behavior_rate=0,
-                           source_class=None, target_class=None, dataset_name=None):
+                           source_class=None, target_class=None, dataset_name=None, untarget=False):
+
+        if untarget:
+            timestamp = int(time.time())
+            target_class = timestamp % 10
 
         epochs = self.local_epochs
         train_loader = DataLoader(self.local_data, self.local_bs, shuffle=True, drop_last=True)

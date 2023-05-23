@@ -173,7 +173,7 @@ class FL:
         return selected_clients
 
     def run_experiment(self, attack_type='no_attack', malicious_behavior_rate=0,
-                       source_class=None, target_class=None, rule='fedavg', resume=False, model_name=None):
+                       source_class=None, target_class=None, rule='fedavg', resume=False, model_name=None, untarget=False):
         simulation_model = copy.deepcopy(self.global_model)
 
         logger.info("===>Simulation started...")
@@ -228,6 +228,7 @@ class FL:
                     client].participant_update(
                     epoch,
                     copy.deepcopy(simulation_model),
+                    untarget=untarget,
                     attack_type=attack_type, malicious_behavior_rate=malicious_behavior_rate,
                     source_class=source_class, target_class=target_class, dataset_name=self.dataset_name)
                 local_weights.append(client_update)
@@ -288,10 +289,10 @@ class FL:
                 # W = generate_orthogonal_matrix(n=n * self.num_clients, reuse=True)
                 # Ws = [W[:, e * n: e * n + n][0, :].reshape(-1, 1) for e in range(self.num_clients)]
 
-                scores = my_function.score(copy.deepcopy(self.global_model),
+                scores = my_function.score(copy.deepcopy(simulation_model),
                                            copy.deepcopy(local_models),
                                            clients_types=clients_types,
-                                           selected_clients=selected_clients, source_class=source_class, m=m, n=n)
+                                           selected_clients=selected_clients, m=m)
                 global_weights = average_weights(local_weights, scores)
                 t = time.time() - cur_time
                 logger.debug('Aggregation took', np.round(t, 4))
