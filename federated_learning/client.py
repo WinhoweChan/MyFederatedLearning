@@ -1,11 +1,14 @@
+import copy
 import time
 
 import numpy as np
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from loguru import logger
+import torch
 
 from federated_learning.attack_alg import label_flipping, gaussian_attack
+from federated_learning.optimizer import PerturbedGradientDescent
 
 
 class Client():
@@ -39,7 +42,6 @@ class Client():
     # ======================================= Start of training function ===========================================================#
     def participant_update(self, global_epoch, model, attack_type='no_attack', malicious_behavior_rate=0,
                            source_class=None, target_class=None, dataset_name=None, untarget=False):
-
         if untarget:
             timestamp = int(time.time())
             target_class = timestamp % 10
@@ -60,26 +62,31 @@ class Client():
                             + str(source_class) + ' to class ' + str(target_class))
         lr = self.local_lr
 
+        server_model = copy.deepcopy(model)
+
         if dataset_name == 'IMDB':
             optimizer = optim.Adam(model.parameters(), lr=lr)
         else:
             optimizer = optim.SGD(model.parameters(), lr=lr,
                                   momentum=self.local_momentum, weight_decay=5e-4)
+
+        optimizer = PerturbedGradientDescent(model.parameters(), lr=lr, mu=0.001)
+
         model.train()
         epoch_loss = []
         client_grad = []
         t = 0
+
         for epoch in range(epochs):
             for batch_idx, (data, target) in enumerate(train_loader):
-                if dataset_name == 'IMDB':
-                    target = target.view(-1, 1) * (1 - attacked)
 
                 data, target = data.to(self.device), target.to(self.device)
                 # for CIFAR10 multi-LF attack
                 # if attacked:
                 #     target = (target + 1)%10
-                output = model(data)
+                output, features = model(data, return_features=True)
                 loss = self.criterion(output, target)
+
                 loss.backward()
                 epoch_loss.append(loss.item())
                 # get gradients
@@ -91,7 +98,7 @@ class Client():
                         else:
                             client_grad[i] += params.grad.clone()
                 t += time.time() - cur_time
-                optimizer.step()
+                optimizer.step(model.parameters(), self.device)
                 model.zero_grad()
                 optimizer.zero_grad()
 

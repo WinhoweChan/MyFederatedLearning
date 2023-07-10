@@ -8,7 +8,7 @@ if __name__ == '__main__':
     FRAC_WORKERS = 1
     ATTACK_TYPE = "label_flipping"
     GLOBAL_ROUND = 100
-    LOCAL_EPOCH = 1
+    LOCAL_EPOCH = 2
     UNTARGET = False
 
     # REPLACE_METHOD = replace_1_with_7()
@@ -19,7 +19,7 @@ if __name__ == '__main__':
     RULE = my_function()
     DATASET = run_cifar10()
 
-    MALICIOUS_RATE = [0.3]  # 0, 0.1, 0.2, 0.3, 0.4, 0.5
+    MALICIOUS_RATE = [0, 0.1, 0.2, 0.3, 0.4]  # 0, 0.1, 0.2, 0.3, 0.4, 0.5
     MALICIOUS_BEHAVIOR_RATE = 1
 
     for rate in MALICIOUS_RATE:

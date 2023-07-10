@@ -1,3 +1,4 @@
+import copy
 import time
 import numpy as np
 import os
@@ -5,18 +6,21 @@ import pickle
 from sklearn.cluster import KMeans
 from loguru import logger
 import matplotlib.pyplot as plt
-from sklearn.metrics import silhouette_score
+from sklearn.metrics import silhouette_score, calinski_harabasz_score
+import sklearn.metrics.pairwise as smp
+import hdbscan
+from sklearn.preprocessing import StandardScaler
 
 
 class MyFunction:
     def __init__(self):
         pass
 
-    def score(self, global_model, local_models, clients_types, selected_clients, m=0):
+    def score(self, global_model, local_models, clients_types, selected_clients, p, w):
 
         n = len(selected_clients)
-        P = generate_orthogonal_matrix(n=m, reuse=True)
-        W = generate_orthogonal_matrix(n=n * n, reuse=True)
+        P = generate_orthogonal_matrix(n=p, reuse=True)
+        W = generate_orthogonal_matrix(n=n * w, reuse=True)
         Ws = [W[:, e * n: e * n + n][0, :].reshape(-1, 1) for e in range(n)]
 
         param_diff = []
@@ -129,9 +133,11 @@ def detect_outliers_kmeans(data, n_clusters=2):
     # 预测聚类标签
     labels = kmeans.predict(data)
     # 计算轮廓系数
-    coefficient = silhouette_score(data, kmeans.labels_)
+    coefficient = silhouette_score(data, labels)
     logger.debug("Silhouette Coefficient：{}", coefficient)
-    if coefficient < 0.65:
+    # calinski_harabasz = calinski_harabasz_score(data, labels)
+    # logger.debug("Calinski Harabasz：{}", calinski_harabasz)
+    if coefficient < 0.61:
         return np.ones(len(data), dtype=int)
 
     scores = labels
@@ -140,7 +146,60 @@ def detect_outliers_kmeans(data, n_clusters=2):
     else:
         scores = labels
 
+    # clusters = {0: [], 1: []}
+    # for i, l in enumerate(labels):
+    #     clusters[l].append(data[i])
+    # good_cl = 0
+    # cs0, cs1 = clusters_dissimilarity(clusters)
+    # if cs0 < cs1:
+    #     good_cl = 1
+    # scores = np.ones([len(labels)])
+    # for i, l in enumerate(labels):
+    #     if l != good_cl:
+    #         scores[i] = 0
+
     return scores
+
+
+def detect_outliers_hdbscan(data):
+    print("-----------HDBSCAN---------------")
+    length = len(data)
+    msc = int(length * 0.5) + 1
+    # Apply HDBSCAN on the computed cosine similarities
+    clusterer = hdbscan.HDBSCAN(min_cluster_size=msc, min_samples=1, allow_single_cluster=True)
+    clusterer.fit(data)
+    labels = clusterer.labels_
+    print('Clusters:', labels)
+
+    n_clusters_ = len(set(labels)) - (1 if -1 in labels else 0)
+    n_noise_ = list(labels).count(-1)
+    print("Estimated number of clusters: %d" % n_clusters_)
+    print("Estimated number of noise points: %d" % n_noise_)
+
+    if sum(labels) == -(length):
+        # In case all of the local models identified as outliers, consider all of as benign
+        benign_idxs = np.arange(length)
+    else:
+        benign_idxs = np.where(labels != -1)[0]
+    print(benign_idxs)
+
+
+def clusters_dissimilarity(clusters):
+    n0 = len(clusters[0])  # 第一个聚类中向量的数量
+    n1 = len(clusters[1])  # 第二个聚类中向量的数量
+    m = n0 + n1  # 总向量数
+    # 计算第一个聚类中向量之间的余弦相似度，并从对角线中减去 1，以排除相同向量之间的相似度。
+    cs0 = smp.cosine_similarity(clusters[0]) - np.eye(n0)
+    # 计算第二个聚类中向量之间的余弦相似度，并从对角线中减去 1。
+    cs1 = smp.cosine_similarity(clusters[1]) - np.eye(n1)
+    # 对于每个向量，计算其与其所在聚类中其他向量的最小相似度。
+    mincs0 = np.min(cs0, axis=1)
+    mincs1 = np.min(cs1, axis=1)
+    # 计算每个聚类的平均最小相似度，并按照聚类大小对其进行加权。
+    ds0 = n0 / m * (1 - np.mean(mincs0))
+    ds1 = n1 / m * (1 - np.mean(mincs1))
+    # 返回两个聚类的不相似度
+    return ds0, ds1
 
 
 def secure_aggregation(xs):
@@ -177,7 +236,7 @@ def svd(x):
 def draw(data, clients_types, scores):
     SAVE_NAME = str(time.time()) + '.jpg'
 
-    fig = plt.figure(figsize=(34, 12))
+    fig = plt.figure(figsize=(20, 6))
     fig1 = plt.subplot(121)
     for i, pt in enumerate(clients_types):
         if pt == 'Good update':
@@ -196,5 +255,4 @@ def draw(data, clients_types, scores):
 
     plt.grid(False)
     # plt.show()
-    plt.savefig(SAVE_NAME, bbox_inches='tight', pad_inches=0.1)
-
+    plt.savefig(SAVE_NAME, bbox_inches='tight', pad_inches=0.1, dpi=400)

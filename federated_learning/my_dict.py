@@ -1,11 +1,23 @@
+from random import choice
+
+
 def replace_1_with_7():
     return {'source_class': 1,
             'target_class': 7}
 
 
+def replace_6_with_9():
+    return {'source_class': 6,
+            'target_class': 9}
+
+
 def replace_dog_with_cat():
     return {'source_class': 5,
             'target_class': 3}
+
+
+def fed_svd():
+    return 'fed_svd'
 
 
 def fed_avg():

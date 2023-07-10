@@ -13,8 +13,8 @@ from tqdm import tqdm_notebook
 
 from federated_learning.client import Client
 from federated_learning.datasets import CustomDataset
-from federated_learning.fl_algorithm import FoolsGold, MyFunction, average_weights, simple_median, trimmed_mean, Krum
-from federated_learning.fl_algorithm.my_func import generate_orthogonal_matrix
+from federated_learning.fl_algorithm import FoolsGold, MyFunction, average_weights, simple_median, trimmed_mean, Krum, \
+    FedSVD, LFD, FLDefender
 from federated_learning.models import setup_model
 from federated_learning.utils import distribute_dataset, contains_class
 
@@ -52,6 +52,8 @@ class FL:
         self.embedding_dim = 100
         self.clients = []
         self.trainset, self.testset = None, None
+
+        self.score_history = np.zeros([self.num_clients], dtype=float)
 
         # Fix the random state of the environment
         random.seed(self.seed)
@@ -127,14 +129,10 @@ class FL:
         for batch_idx, (data, target) in enumerate(test_loader):
             data, target = data.to(self.device), target.to(self.device)
             output = model(data)
-            if dataset_name == 'IMDB':
-                test_loss.append(self.criterion(output, target.view(-1, 1)).item())  # sum up batch loss
-                pred = output > 0.5  # get the index of the max log-probability
-                correct += pred.eq(target.view_as(pred)).sum().item()
-            else:
-                test_loss.append(self.criterion(output, target).item())  # sum up batch loss
-                pred = output.argmax(dim=1, keepdim=True)  # get the index of the max log-probability
-                correct += pred.eq(target.view_as(pred)).sum().item()
+
+            test_loss.append(self.criterion(output, target).item())  # sum up batch loss
+            pred = output.argmax(dim=1, keepdim=True)  # get the index of the max log-probability
+            correct += pred.eq(target.view_as(pred)).sum().item()
 
             n += target.shape[0]
         test_loss = np.mean(test_loss)
@@ -152,10 +150,8 @@ class FL:
             for data, target in test_loader:
                 data, target = data.to(self.device), target.to(self.device)
                 output = model(data)
-                if dataset_name == 'IMDB':
-                    prediction = output > 0.5
-                else:
-                    prediction = output.argmax(dim=1, keepdim=True)
+
+                prediction = output.argmax(dim=1, keepdim=True)
 
                 actuals.extend(target.view_as(prediction))
                 predictions.extend(prediction)
@@ -178,8 +174,11 @@ class FL:
 
         logger.info("===>Simulation started...")
 
+        lfd = LFD(self.num_classes)
         fg = FoolsGold(self.num_clients)
         my_function = MyFunction()
+        fed_svd = FedSVD()
+        fl_dfndr = FLDefender(self.num_clients)
         # copy weights
         global_weights = simulation_model.state_dict()
         last10_updates = []
@@ -252,13 +251,13 @@ class FL:
             elif rule == 'tmean':
                 cur_time = time.time()
                 # trim_ratio = self.attackers_ratio * self.num_clients / len(selected_clients)
-                trim_ratio = self.attackers_ratio * len(selected_clients) / self.num_clients
+                trim_ratio = self.attackers_ratio * self.num_clients / len(selected_clients)
                 global_weights = trimmed_mean(local_weights, trim_ratio=trim_ratio)
                 cpu_runtimes.append(time.time() - cur_time)
 
             elif rule == 'mkrum':
                 cur_time = time.time()
-                good_updates = Krum(local_models, f=int(f*len(selected_clients) / self.num_clients), multi=True)
+                good_updates = Krum(local_models, f=f, multi=True)
                 scores[good_updates] = 1
                 global_weights = average_weights(local_weights, scores)
                 cpu_runtimes.append(time.time() - cur_time)
@@ -266,8 +265,32 @@ class FL:
             elif rule == 'foolsgold':
                 cur_time = time.time()
                 scores = fg.score_gradients(local_grads, selected_clients)
+
+                logger.debug("Defense result:")
+                for i, pt in enumerate(clients_types):
+                    logger.info(str(pt) + ' scored ' + str(scores[i]))
+
                 global_weights = average_weights(local_weights, scores)
                 cpu_runtimes.append(time.time() - cur_time + t)
+
+            elif rule == 'fl_defender':
+                cur_time = time.time()
+                scores = fl_dfndr.score(copy.deepcopy(simulation_model),
+                                        copy.deepcopy(local_models),
+                                        peers_types=clients_types,
+                                        selected_peers=selected_clients,
+                                        epoch=epoch + 1,
+                                        tau=(1.5 * epoch / self.global_rounds))
+
+                trust = self.update_score_history(scores, selected_clients, epoch)
+                t = time.time() - cur_time
+
+                logger.debug("Defense result:")
+                for i, pt in enumerate(clients_types):
+                    logger.info(str(pt) + ' scored ' + str(trust[i]))
+
+                global_weights = average_weights(local_weights, trust)
+                cpu_runtimes.append(t)
 
             elif rule == 'fedavg':
                 cur_time = time.time()
@@ -292,11 +315,20 @@ class FL:
                 scores = my_function.score(copy.deepcopy(simulation_model),
                                            copy.deepcopy(local_models),
                                            clients_types=clients_types,
-                                           selected_clients=selected_clients, m=m)
+                                           selected_clients=selected_clients, p=m, w=n)
                 global_weights = average_weights(local_weights, scores)
                 t = time.time() - cur_time
                 logger.debug('Aggregation took', np.round(t, 4))
                 cpu_runtimes.append(t)
+
+            elif rule == 'fed_svd':
+                print("--------------------------")
+                cur_time = time.time()
+                new_global_weights = fed_svd.aggregation(copy.deepcopy(global_weights),
+                                                         copy.deepcopy(local_weights),
+                                                         [])
+                global_weights = new_global_weights
+                cpu_runtimes.append(time.time() - cur_time)
 
             else:
                 global_weights = average_weights(local_weights, [1 for i in range(len(local_weights))])
@@ -392,3 +424,12 @@ class FL:
         logger.debug("Test loss: {}".format(test_losses))
         logger.debug("Attack success rate: {}".format(asr))
         logger.debug("Average CPU aggregation runtime: {}".format(np.mean(cpu_runtimes)))
+
+    def update_score_history(self, scores, selected_peers, epoch):
+        print('-> Update score history')
+        self.score_history[selected_peers] += scores
+        q1 = np.quantile(self.score_history, 0.25)
+        trust = self.score_history - q1
+        trust = trust / trust.max()
+        trust[(trust < 0)] = 0
+        return trust[selected_peers]

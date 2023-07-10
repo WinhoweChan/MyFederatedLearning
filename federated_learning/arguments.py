@@ -23,7 +23,7 @@ class Arguments:
         self.seed = SEED
 
         self.global_rounds = 100
-        self.local_epochs = 1
+        self.local_epochs = 2
 
         self.source_class = 1
         self.target_class = 7
