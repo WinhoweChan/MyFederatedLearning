@@ -1,4 +1,4 @@
-# MyFederatedLearning
+# FLProbe
 ### run
 ```
 python main.py
