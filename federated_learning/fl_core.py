@@ -13,8 +13,8 @@ from tqdm import tqdm_notebook
 
 from federated_learning.client import Client
 from federated_learning.datasets import CustomDataset
-from federated_learning.fl_algorithm import FoolsGold, MyFunction, average_weights, simple_median, trimmed_mean, Krum, \
-    FedSVD, LFD, FLDefender
+from federated_learning.fl_algorithm import FoolsGold, FLProbe, average_weights, simple_median, trimmed_mean, Krum, \
+    FedSVD
 from federated_learning.models import setup_model
 from federated_learning.utils import distribute_dataset, contains_class
 
@@ -176,9 +176,8 @@ class FL:
 
         lfd = LFD(self.num_classes)
         fg = FoolsGold(self.num_clients)
-        my_function = MyFunction()
+        fl_probe = FLProbe()
         fed_svd = FedSVD()
-        fl_dfndr = FLDefender(self.num_clients)
         # copy weights
         global_weights = simulation_model.state_dict()
         last10_updates = []
@@ -273,31 +272,12 @@ class FL:
                 global_weights = average_weights(local_weights, scores)
                 cpu_runtimes.append(time.time() - cur_time + t)
 
-            elif rule == 'fl_defender':
-                cur_time = time.time()
-                scores = fl_dfndr.score(copy.deepcopy(simulation_model),
-                                        copy.deepcopy(local_models),
-                                        peers_types=clients_types,
-                                        selected_peers=selected_clients,
-                                        epoch=epoch + 1,
-                                        tau=(1.5 * epoch / self.global_rounds))
-
-                trust = self.update_score_history(scores, selected_clients, epoch)
-                t = time.time() - cur_time
-
-                logger.debug("Defense result:")
-                for i, pt in enumerate(clients_types):
-                    logger.info(str(pt) + ' scored ' + str(trust[i]))
-
-                global_weights = average_weights(local_weights, trust)
-                cpu_runtimes.append(t)
-
             elif rule == 'fedavg':
                 cur_time = time.time()
                 global_weights = average_weights(local_weights, [1 for i in range(len(local_weights))])
                 cpu_runtimes.append(time.time() - cur_time)
 
-            elif rule == 'my_function':
+            elif rule == 'flprobe':
                 cur_time = time.time()
                 if model_name == "CNNMNIST":
                     m = 50
@@ -312,7 +292,7 @@ class FL:
                 # W = generate_orthogonal_matrix(n=n * self.num_clients, reuse=True)
                 # Ws = [W[:, e * n: e * n + n][0, :].reshape(-1, 1) for e in range(self.num_clients)]
 
-                scores = my_function.score(copy.deepcopy(simulation_model),
+                scores = fl_probe.score(copy.deepcopy(simulation_model),
                                            copy.deepcopy(local_models),
                                            clients_types=clients_types,
                                            selected_clients=selected_clients, p=m, w=n)

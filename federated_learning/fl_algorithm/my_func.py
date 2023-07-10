@@ -12,7 +12,7 @@ import hdbscan
 from sklearn.preprocessing import StandardScaler
 
 
-class MyFunction:
+class FLProbe:
     def __init__(self):
         pass
 

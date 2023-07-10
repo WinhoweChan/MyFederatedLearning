@@ -24,8 +24,8 @@ def fed_avg():
     return 'fedavg'
 
 
-def my_function():
-    return 'my_function'
+def fl_probe():
+    return 'fl_probe'
 
 
 def simple_median():
